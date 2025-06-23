@@ -1,0 +1,57 @@
+/* Tailwind CSS is primarily used via CDN and utility classes in the TSX file.
+   This file can be used for global styles or component-specific styles not covered by Tailwind.
+*/
+body {
+  margin: 0; /* Basic reset */
+  /* Ensure Tailwind's base styles are effectively applied */
+  overflow-x: hidden; /* Prevent horizontal scrollbar during animations */
+}
+
+@keyframes revealLetter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-letter-reveal {
+  opacity: 0; /* Start hidden */
+  animation-name: revealLetter;
+  animation-duration: 0.6s; /* Duration of individual letter animation */
+  animation-fill-mode: forwards; /* Retain final state */
+  animation-timing-function: ease-out; /* Smooth easing */
+}
+
+/* Continuous Logo Scroll Animation */
+@keyframes continuous-logo-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    /*
+      We translate by the width of one full set of unique logos.
+      This value is passed via a CSS custom property '--scroll-width'
+      set inline on the animated element in PartnersSection.
+    */
+    transform: translateX(var(--scroll-width));
+  }
+}
+
+.animate-continuous-logo-scroll {
+  /*
+    The animation duration controls speed.
+    A longer duration means slower scrolling.
+    NUM_UNIQUE_LOGOS * (speed_per_logo)
+    e.g., 8 logos * 5s/logo = 40s
+  */
+  animation: continuous-logo-scroll 40s linear infinite;
+}
+
+/* Optional: Pause animation on hover */
+.logo-carousel-viewport:hover .animate-continuous-logo-scroll {
+  animation-play-state: paused;
+}
