@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { asset, SITE, MENU_ROUTES } from './siteConfig';
 
 // --- Intro Loader Animation (show only once per page load) ---
 let landingLoaderShown = false;
@@ -162,40 +163,40 @@ const LandingIntroLoader = ({ text = "DSFILMS" }) => {
 			artist: '2024',
 			title: 'Águas Calmas',
 			duration: '00:01:15',
-			poster: '/assets/images/1.jpg',
-			videoSrc: '/assets/videos/v1.mp4',
+			poster: asset('/assets/images/1.jpg'),
+			videoSrc: asset('/assets/videos/v1.mp4'),
 		},
 		{
 			id: 2,
 			artist: '2024',
 			title: 'Shapers',
 			duration: '00:02:30',
-			poster: '/assets/images/2.jpg',
-			videoSrc: '/assets/videos/v2.mp4',
+			poster: asset('/assets/images/2.jpg'),
+			videoSrc: asset('/assets/videos/v2.mp4'),
 		},
 		{
 			id: 3,
 			artist: '2023',
 			title: 'Fauna Sicó',
 			duration: '00:01:45',
-			poster: '/assets/images/3.jpg',
-			videoSrc: '/assets/videos/v3.mp4',
+			poster: asset('/assets/images/3.jpg'),
+			videoSrc: asset('/assets/videos/v3.mp4'),
 		},
 		{
 			id: 4,
 			artist: '2025',
 			title: 'Sarrano',
 			duration: '00:02:10',
-			poster: '/assets/images/4.jpg',
-			videoSrc: '/assets/videos/v4.mp4',
+			poster: asset('/assets/images/4.jpg'),
+			videoSrc: asset('/assets/videos/v4.mp4'),
 		},
 		{
 			id: 5,
 			artist: '2022',
 			title: 'Get Close',
 			duration: '00:01:55',
-			poster: '/assets/images/5.jpg',
-			videoSrc: '/assets/videos/v5.mp4',
+			poster: asset('/assets/images/5.jpg'),
+			videoSrc: asset('/assets/videos/v5.mp4'),
 		},
 	];
 
@@ -562,9 +563,9 @@ const ArtistPortfolioMenu = ({ open, onClose, activeVideoRef }) => {
 
   // Move useMemo to the top, before any return
   const previewVideos = useMemo(() => [
-    "/assets/videos/v1.mp4",
-    "/assets/videos/v2.mp4",
-    "/assets/videos/v3.mp4"
+    asset('/assets/videos/v1.mp4'),
+    asset('/assets/videos/v2.mp4'),
+    asset('/assets/videos/v3.mp4'),
   ], []);
 
   /**
@@ -684,7 +685,13 @@ const ArtistPortfolioMenu = ({ open, onClose, activeVideoRef }) => {
                     cursor: 'pointer',
                   }}
                   className="relative group-hover:translate-x-[180px]"
-                  onClick={() => text === 'About Us' ? navigate('/aboutuspage') : null}
+                  onClick={() => {
+                    const route = MENU_ROUTES[text];
+                    if (route) {
+                      navigate(route);
+                      onClose();
+                    }
+                  }}
                 >
                   {text}
                 </button>
@@ -724,6 +731,11 @@ const ArtistPortfolioMenu = ({ open, onClose, activeVideoRef }) => {
 // --- VideoShowcase component ---
 const SCROLLS_PER_VIDEO = 4;
 
+function seekVideoToStep(videoEl, step) {
+	if (!videoEl?.duration) return;
+	videoEl.currentTime = (step / SCROLLS_PER_VIDEO) * videoEl.duration;
+}
+
 const VideoShowcase = (props) => {
 	const { initialVideos = videos } = props;
 	const [currentVideoIndex, setCurrentVideoIndex] = useState(1);
@@ -746,6 +758,50 @@ const VideoShowcase = (props) => {
 	const [videoReady, setVideoReady] = useState([true, false]);
 
 	const scrollLock = useRef(false);
+	const currentVideoIndexRef = useRef(currentVideoIndex);
+	const scrollStepRef = useRef(scrollStep);
+	const activeVideoRef = useRef(activeVideo);
+	const videoSourcesRef = useRef(videoSources);
+	const videoReadyRef = useRef(videoReady);
+
+	useEffect(() => {
+		currentVideoIndexRef.current = currentVideoIndex;
+	}, [currentVideoIndex]);
+
+	useEffect(() => {
+		scrollStepRef.current = scrollStep;
+	}, [scrollStep]);
+
+	useEffect(() => {
+		activeVideoRef.current = activeVideo;
+	}, [activeVideo]);
+
+	useEffect(() => {
+		videoSourcesRef.current = videoSources;
+	}, [videoSources]);
+
+	useEffect(() => {
+		videoReadyRef.current = videoReady;
+	}, [videoReady]);
+
+	const activateVideoBuffer = (idx) => {
+		const inactive = (idx + 1) % 2;
+		if (videoRefs[inactive].current) {
+			videoRefs[inactive].current.pause();
+		}
+		activeVideoRef.current = idx;
+		setActiveVideo(idx);
+		setVideoReady((ready) => {
+			const newReady = [...ready];
+			newReady[idx] = true;
+			videoReadyRef.current = newReady;
+			return newReady;
+		});
+		seekVideoToStep(videoRefs[idx].current, scrollStepRef.current);
+		if (!isPaused && videoRefs[idx].current) {
+			videoRefs[idx].current.play()?.catch?.(() => {});
+		}
+	};
 
 	// Handle scroll: each scroll is a quarter, at end switch to next video
 	const handleWheel = (e) => {
@@ -756,27 +812,30 @@ const VideoShowcase = (props) => {
 		scrollLock.current = true;
 
 		const direction = e.deltaY > 0 ? 1 : -1;
-		let newStep = scrollStep + direction;
+		const index = currentVideoIndexRef.current;
+		let newStep = scrollStepRef.current + direction;
 
 		if (newStep >= SCROLLS_PER_VIDEO) {
-			// Next video, step 0
-			const nextIndex = (currentVideoIndex + 1) % initialVideos.length;
+			const nextIndex = (index + 1) % initialVideos.length;
+			currentVideoIndexRef.current = nextIndex;
+			scrollStepRef.current = 0;
 			setCurrentVideoIndex(nextIndex);
 			setScrollStep(0);
 			setIsPaused(false);
 		} else if (newStep < 0) {
-			// Previous video, step 3
-			const prevIndex = (currentVideoIndex - 1 + initialVideos.length) % initialVideos.length;
+			const prevIndex = (index - 1 + initialVideos.length) % initialVideos.length;
+			currentVideoIndexRef.current = prevIndex;
+			scrollStepRef.current = SCROLLS_PER_VIDEO - 1;
 			setCurrentVideoIndex(prevIndex);
 			setScrollStep(SCROLLS_PER_VIDEO - 1);
 			setIsPaused(false);
 		} else {
+			scrollStepRef.current = newStep;
 			setScrollStep(newStep);
-			// Seek within current video
-			const video = videoRefs[activeVideo].current;
-			if (video && video.duration) {
-				const percent = (newStep / SCROLLS_PER_VIDEO) * 100;
-				video.currentTime = (percent / 100) * video.duration;
+			const activeIdx = activeVideoRef.current;
+			const targetSrc = initialVideos[index].videoSrc;
+			if (videoSourcesRef.current[activeIdx] === targetSrc) {
+				seekVideoToStep(videoRefs[activeIdx].current, newStep);
 			}
 		}
 
@@ -785,45 +844,65 @@ const VideoShowcase = (props) => {
 		}, 120);
 	};
 
-	// When switching videos, always start at scrollStep (0 or 3)
+	// Seek only when the active buffer is showing the intended clip
 	useEffect(() => {
-		const video = videoRefs[activeVideo].current;
-		if (video && video.duration) {
-			const percent = (scrollStep / SCROLLS_PER_VIDEO) * 100;
-			video.currentTime = (percent / 100) * video.duration;
-		}
-		// eslint-disable-next-line
-	}, [currentVideoIndex, activeVideo, scrollStep]);
+		const targetSrc = initialVideos[currentVideoIndex].videoSrc;
+		if (videoSources[activeVideo] !== targetSrc) return;
+		seekVideoToStep(videoRefs[activeVideo].current, scrollStep);
+	}, [currentVideoIndex, activeVideo, scrollStep, videoSources, initialVideos]);
 
-	// Crossfade logic
+	// Crossfade logic with fast-path when target is already buffered
 	useEffect(() => {
-		const nextVideo = (activeVideo + 1) % 2;
-		setVideoSources((sources) => {
-			const newSources = [...sources];
-			newSources[nextVideo] = initialVideos[currentVideoIndex].videoSrc;
+		const targetSrc = initialVideos[currentVideoIndex].videoSrc;
+		const sources = videoSourcesRef.current;
+		const ready = videoReadyRef.current;
+
+		for (let idx = 0; idx < 2; idx++) {
+			if (sources[idx] === targetSrc && ready[idx]) {
+				if (activeVideoRef.current !== idx) {
+					activateVideoBuffer(idx);
+				} else {
+					seekVideoToStep(videoRefs[idx].current, scrollStepRef.current);
+				}
+				return;
+			}
+		}
+
+		const nextVideo = (activeVideoRef.current + 1) % 2;
+		setVideoSources((prevSources) => {
+			const newSources = [...prevSources];
+			newSources[nextVideo] = targetSrc;
 			return newSources;
 		});
-		setVideoReady((ready) => {
-			const newReady = [...ready];
+		setVideoReady((prevReady) => {
+			const newReady = [...prevReady];
 			newReady[nextVideo] = false;
 			return newReady;
 		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentVideoIndex, initialVideos]);
 
 	const handleCanPlay = (idx) => {
+		const targetSrc = initialVideos[currentVideoIndexRef.current].videoSrc;
+		if (videoSourcesRef.current[idx] !== targetSrc) return;
+
 		setVideoReady((ready) => {
 			const newReady = [...ready];
 			newReady[idx] = true;
+			videoReadyRef.current = newReady;
 			return newReady;
 		});
+
 		const inactive = (idx + 1) % 2;
 		if (videoRefs[inactive].current) {
 			videoRefs[inactive].current.pause();
 		}
-		if (!isPaused && videoRefs[idx].current) {
-			videoRefs[idx].current.play().catch(() => {});
-		}
+		activeVideoRef.current = idx;
 		setActiveVideo(idx);
+		seekVideoToStep(videoRefs[idx].current, scrollStepRef.current);
+		if (!isPaused && videoRefs[idx].current) {
+			videoRefs[idx].current.play()?.catch?.(() => {});
+		}
 	};
 
 	useEffect(() => {
@@ -832,7 +911,7 @@ const VideoShowcase = (props) => {
 				if (isPaused) {
 					ref.current.pause();
 				} else {
-					ref.current.play().catch(() => {});
+					ref.current.play()?.catch?.(() => {});
 				}
 			}
 		});
@@ -896,15 +975,17 @@ const VideoShowcase = (props) => {
 	}, [menuOpen]);
 
 	const handleThumbnailClick = (index) => {
-		if (index === currentVideoIndex) {
-			// If already on this video, just seek to start
+		scrollStepRef.current = 0;
+		if (index === currentVideoIndexRef.current) {
 			setScrollStep(0);
 			setIsPaused(false);
-			const video = videoRefs[activeVideo].current;
-			if (video && video.duration) {
-				video.currentTime = 0;
+			const activeIdx = activeVideoRef.current;
+			const targetSrc = initialVideos[index].videoSrc;
+			if (videoSourcesRef.current[activeIdx] === targetSrc) {
+				seekVideoToStep(videoRefs[activeIdx].current, 0);
 			}
 		} else {
+			currentVideoIndexRef.current = index;
 			setCurrentVideoIndex(index);
 			setScrollStep(0);
 			setIsPaused(false);
@@ -974,14 +1055,14 @@ const VideoShowcase = (props) => {
 				<LisbonClock id="lisbon-clock" />
 
 				{/* Logo in the top left corner */}
-				<a
+				<Link
 					id="logo-link"
-					href="/"
+					to="/"
 					className="absolute top-6 left-6 z-40"
 					style={{ display: 'block', width: 96, height: 96 }}
 				>
 					<img
-						src="/assets/logo/png-white.png"
+						src={asset('/assets/logo/png-white.png')}
 						alt="Logo"
 						style={{
 							width: 100,
@@ -990,7 +1071,7 @@ const VideoShowcase = (props) => {
 							display: 'block',
 						}}
 					/>
-				</a>
+				</Link>
 
 				{/* Only show the video UI and visualizer when menuOpen is false */}
 				{!menuOpen && (
@@ -1070,7 +1151,7 @@ const VideoShowcase = (props) => {
 				>
 					<div className="flex space-x-6">
 						<a
-							href="https://instagram.com"
+							href={SITE.social.instagram}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="hover:underline transition-all duration-300"
@@ -1078,7 +1159,7 @@ const VideoShowcase = (props) => {
 							Instagram
 						</a>
 						<a
-							href="https://example.com/cinematography"
+							href={SITE.social.cinematography}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="hover:underline transition-all duration-300"
@@ -1087,7 +1168,7 @@ const VideoShowcase = (props) => {
 						</a>
 					</div>
 					<div>
-						<p>Portugal Based Director</p>
+						<p>{SITE.tagline}</p>
 					</div>
 				</footer>
 
@@ -1322,42 +1403,5 @@ const LisbonClock = ({ id }) => {
 		</div>
 	);
 };
-
-function CodeByCSSPicker() {
-  const navigate = useNavigate();
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-blue-600 mb-4">Code by CSSPicker</h1>
-        <p className="text-lg text-gray-700">Welcome to your landing page!</p>
-      </div>
-      <nav>
-        <ul className="flex space-x-4">
-          <li>
-            <Link to="/" className="text-blue-600 hover:underline">
-              Home
-            </Link>
-          </li>
-          <li>
-            <Link to="/about" className="text-blue-600 hover:underline">
-              About
-            </Link>
-          </li>
-          <li>
-            <Link to="/services" className="text-blue-600 hover:underline">
-              Services
-            </Link>
-          </li>
-          <li>
-            <Link to="/contact" className="text-blue-600 hover:underline">
-              Contact
-            </Link>
-          </li>
-        </ul>
-      </nav>
-    </div>
-  );
-}
 
 export default VideoShowcase;
