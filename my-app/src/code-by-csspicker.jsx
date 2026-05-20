@@ -736,6 +736,14 @@ function seekVideoToStep(videoEl, step) {
 	videoEl.currentTime = (step / SCROLLS_PER_VIDEO) * videoEl.duration;
 }
 
+function sourcesMatch(loadedSrc, targetSrc) {
+	if (!loadedSrc || !targetSrc) return false;
+	if (loadedSrc === targetSrc) return true;
+	const loadedName = loadedSrc.split('/').pop();
+	const targetName = targetSrc.split('/').pop();
+	return loadedName === targetName;
+}
+
 const VideoShowcase = (props) => {
 	const { initialVideos = videos } = props;
 	const [currentVideoIndex, setCurrentVideoIndex] = useState(1);
@@ -872,19 +880,27 @@ const VideoShowcase = (props) => {
 		setVideoSources((prevSources) => {
 			const newSources = [...prevSources];
 			newSources[nextVideo] = targetSrc;
+			videoSourcesRef.current = newSources;
 			return newSources;
 		});
 		setVideoReady((prevReady) => {
 			const newReady = [...prevReady];
 			newReady[nextVideo] = false;
+			videoReadyRef.current = newReady;
 			return newReady;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentVideoIndex, initialVideos]);
 
-	const handleCanPlay = (idx) => {
+	const handleVideoReady = (idx) => {
 		const targetSrc = initialVideos[currentVideoIndexRef.current].videoSrc;
-		if (videoSourcesRef.current[idx] !== targetSrc) return;
+		const el = videoRefs[idx].current;
+		const loadedSrc =
+			el?.querySelector('source')?.getAttribute('src') ||
+			videoSourcesRef.current[idx] ||
+			'';
+
+		if (!sourcesMatch(loadedSrc, targetSrc)) return;
 
 		setVideoReady((ready) => {
 			const newReady = [...ready];
@@ -899,10 +915,14 @@ const VideoShowcase = (props) => {
 		}
 		activeVideoRef.current = idx;
 		setActiveVideo(idx);
-		seekVideoToStep(videoRefs[idx].current, scrollStepRef.current);
-		if (!isPaused && videoRefs[idx].current) {
-			videoRefs[idx].current.play()?.catch?.(() => {});
+		seekVideoToStep(el, scrollStepRef.current);
+		if (!isPaused && el) {
+			el.play()?.catch?.(() => {});
 		}
+	};
+
+	const handleCanPlay = (idx) => {
+		handleVideoReady(idx);
 	};
 
 	useEffect(() => {
@@ -1016,6 +1036,7 @@ const VideoShowcase = (props) => {
 							loop
 							playsInline
 							onCanPlay={() => handleCanPlay(idx)}
+							onLoadedData={() => handleVideoReady(idx)}
 							style={{
 								opacity: activeVideo === idx && videoReady[idx] ? 1 : 0,
 								transition: 'opacity 0.3s',
